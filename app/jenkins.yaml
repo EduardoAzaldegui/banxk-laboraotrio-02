@@ -1,0 +1,184 @@
+jenkins:
+  systemMessage: "Jenkins Configurado para BankX Microservices 🚀"
+  numExecutors: 4
+  mode: NORMAL
+  
+  authorizationStrategy:
+    loggedInUsersCanDoAnything:
+      allowAnonymousRead: false
+  
+  securityRealm:
+    local:
+      allowsSignup: false
+      users:
+        - id: "${JENKINS_ADMIN_USER}"
+          password: "${JENKINS_ADMIN_PASSWORD}"
+
+credentials:
+  system:
+    domainCredentials:
+      - credentials:
+          - usernamePassword:
+              scope: GLOBAL
+              id: "github-token"
+              username: "${GITHUB_USER}"
+              password: "${GITHUB_TOKEN}"
+              description: "GitHub Personal Access Token"
+          
+          - string:
+              scope: GLOBAL
+              id: "github-webhook-secret"
+              secret: "${GITHUB_WEBHOOK_SECRET}"
+              description: "GitHub Webhook Secret"
+          
+
+jobs:
+    - script: |
+      pipelineJob('deploy-infrastructure') {
+        description('Despliegue de Infraestructura Base')
+        properties {
+          githubProjectProperty {
+            projectUrlStr("${GITHUB_REPO_URL_INFRA}")
+          }
+          pipelineTriggers {
+            triggers {
+              GenericTrigger {
+                genericVariables {
+                  genericVariable { key("ref"); value("\$.ref") }
+                  genericVariable { key("repository_name"); value("\$.repository.name") }
+                  genericVariable { key("pusher_name"); value("\$.pusher.name") }
+                  genericVariable { key("commit_message"); value("\$.head_commit.message") }
+                }
+                token("${JENKINS_WEBHOOK_TOKEN_INFRA}")
+                causeString('Triggered by GitHub webhook (Infrastructure)')
+                printContributedVariables(true)
+                printPostContent(true)
+                regexpFilterText('\$ref')
+                regexpFilterExpression("^refs/heads/${GITHUB_BRANCH_INFRA}\$")
+              }
+            }
+          }
+        }
+        definition {
+          cpsScm {
+            scm {
+              git {
+                remote {
+                  url("${GITHUB_REPO_URL_INFRA}")
+                  credentials("github-token")
+                }
+                branches("*/${GITHUB_BRANCH_INFRA}")
+              }
+            }
+            scriptPath("bank-infrastructure/Jenkinsfile") 
+          }
+        }
+      }
+
+
+  - script: |
+      pipelineJob('deploy-card-ops-producer') {
+        description('Microservicio Producer (Kafka/Avro)')
+        
+        properties {
+          githubProjectProperty {
+            projectUrlStr("${GITHUB_REPO_URL_PRODUCER}")
+          }
+          pipelineTriggers {
+            triggers {
+              GenericTrigger {
+                genericVariables {
+                  genericVariable { key("ref"); value("\$.ref") }
+                  genericVariable { key("repository_name"); value("\$.repository.name") }
+                  genericVariable { key("pusher_name"); value("\$.pusher.name") }
+                  genericVariable { key("commit_message"); value("\$.head_commit.message") }
+                }
+                token("${JENKINS_WEBHOOK_TOKEN_PRODUCER}")
+                causeString('Triggered by GitHub webhook (Producer)')
+                printContributedVariables(true)
+                printPostContent(true)
+                regexpFilterText('\$ref')
+                regexpFilterExpression("^refs/heads/${GITHUB_BRANCH_PRODUCER}\$")
+              }
+            }
+          }
+        }
+        definition {
+          cpsScm {
+            scm {
+              git {
+                remote {
+                  url("${GITHUB_REPO_URL_PRODUCER}")
+                  credentials("github-token")
+                }
+                branches("*/${GITHUB_BRANCH_PRODUCER}")
+              }
+            }
+            scriptPath("card-ops-producer/Jenkinsfile") 
+          }
+        }
+      }
+
+
+
+  - script: |
+      pipelineJob('deploy-dispatch-consumer') {
+        description('Microservicio Consumer (RxJava/Mongo)')
+        properties {
+          githubProjectProperty {
+            projectUrlStr("${GITHUB_REPO_URL_CONSUMER}")
+          }
+          pipelineTriggers {
+            triggers {
+              GenericTrigger {
+                genericVariables {
+                  genericVariable { key("ref"); value("\$.ref") }
+                  genericVariable { key("repository_name"); value("\$.repository.name") }
+                  genericVariable { key("pusher_name"); value("\$.pusher.name") }
+                  genericVariable { key("commit_message"); value("\$.head_commit.message") }
+                }
+                token("${JENKINS_WEBHOOK_TOKEN_CONSUMER}")
+                causeString('Triggered by GitHub webhook (Consumer)')
+                printContributedVariables(true)
+                printPostContent(true)
+                regexpFilterText('\$ref')
+                regexpFilterExpression("^refs/heads/${GITHUB_BRANCH_CONSUMER}\$")
+              }
+            }
+          }
+        }
+        definition {
+          cpsScm {
+            scm {
+              git {
+                remote {
+                  url("${GITHUB_REPO_URL_CONSUMER}")
+                  credentials("github-token")
+                }
+                branches("*/${GITHUB_BRANCH_CONSUMER}")
+              }
+            }
+            scriptPath("dispatch-consumer")
+          }
+        }
+      }
+
+
+
+
+tool:
+  git:
+    installations:
+      - name: "Default"
+        home: "git"
+
+security:
+  scriptApproval:
+    approvedSignatures: ["**"]
+    forceSandbox: false
+
+unclassified:      
+  location:
+    url: "${JENKINS_URL}"
+  globalLibraries:
+    libraries: []

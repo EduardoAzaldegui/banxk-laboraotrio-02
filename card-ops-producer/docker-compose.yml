@@ -1,0 +1,26 @@
+version: "3.9"
+
+
+services:
+  card-ops-producer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: verdugox/card-ops-producer:latest
+    container_name: card-ops-producer
+    depends_on: [ kafka, schema-registry, redis ]
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      SCHEMA_REGISTRY_URL: http://schema-registry:8081
+      REDIS_HOST: redis
+    ports:
+      - "8085:8085"  # CAMBIO: Puerto 8085 según PDF
+    networks:
+      - bank-network
+
+
+networks:
+  bank-network:
+    external: true
+    name: bank-network # Asegura que busque exactamente este nombre

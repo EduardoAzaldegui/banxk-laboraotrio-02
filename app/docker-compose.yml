@@ -1,0 +1,58 @@
+version: '3.8'
+
+services:
+  jenkins:
+    build: .
+    container_name: jenkins
+    ports:
+      - "${JENKINS_PORT:-8081}:8080"
+      - "${JENKINS_AGENT_PORT:-50001}:50000"
+    volumes:
+      - jenkins_home:/var/jenkins_home
+      - /var/run/docker.sock:/var/run/docker.sock
+      # - /usr/bin/docker:/usr/bin/docker
+      - ./jenkins.yaml:/var/jenkins_home/jenkins.yaml
+      # - ./Jenkinsfile:/var/jenkins_home/Jenkinsfile  # Agregar esta línea
+    environment:
+      # Jenkins básico
+      - JENKINS_OPTS=-Dpermissive-script-security.enabled=no_security
+      - JAVA_OPTS=-Djenkins.install.runSetupWizard=false -Dhudson.plugins.git.GitSCM.ALLOW_LOCAL_CHECKOUT=true
+      - CASC_JENKINS_CONFIG=/var/jenkins_home/jenkins.yaml
+
+      # 👤 Usuario común de GitHub (mismo token para ambos repos)
+      - GITHUB_USER=${GITHUB_USER}
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+
+      # 🔐 Jenkins admin
+      - JENKINS_ADMIN_USER=${JENKINS_ADMIN_USER}
+      - JENKINS_ADMIN_PASSWORD=${JENKINS_ADMIN_PASSWORD}
+
+      # 🌐 URL pública
+      - JENKINS_URL=${JENKINS_URL}
+      
+      # 📦 INFRAESTRUCTURA VARS
+      - GITHUB_REPO_URL_INFRA=${GITHUB_REPO_URL_INFRA}
+      - GITHUB_BRANCH_INFRA=${GITHUB_BRANCH_INFRA}
+      - JENKINS_WEBHOOK_TOKEN_INFRA=${JENKINS_WEBHOOK_TOKEN_INFRA}
+
+      # 📦 PRODUCER VARS
+      - GITHUB_REPO_URL_PRODUCER=${GITHUB_REPO_URL_PRODUCER}
+      - GITHUB_BRANCH_PRODUCER=${GITHUB_BRANCH_PRODUCER}
+      - JENKINS_WEBHOOK_TOKEN_PRODUCER=${JENKINS_WEBHOOK_TOKEN_PRODUCER}
+
+      # 📦 CONSUMER VARS
+      - GITHUB_REPO_URL_CONSUMER=${GITHUB_REPO_URL_CONSUMER}
+      - GITHUB_BRANCH_CONSUMER=${GITHUB_BRANCH_CONSUMER}
+      - JENKINS_WEBHOOK_TOKEN_CONSUMER=${JENKINS_WEBHOOK_TOKEN_CONSUMER}
+    
+    restart: unless-stopped
+    user: root
+    networks:
+      - jenkins-network
+
+volumes:
+  jenkins_home:
+
+networks:
+  jenkins-network:
+    driver: bridge
