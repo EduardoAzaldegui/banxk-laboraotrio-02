@@ -1,0 +1,208 @@
+pipeline {
+    agent any
+
+    environment {
+        // Variables específicas del proyecto
+        PROJECT_PATH = 'bank-infrastructure'
+        COMPOSE_FILE = 'docker-compose.yml'
+        PROJECT_NAME = 'bank-infra'
+        
+        // Mapeo de variables de entorno (asumiendo que vienen de Jenkins Global Vars o .env)
+        // Si no vienen inyectadas, puedes poner los valores "hardcodeados" aquí como fallback
+        GITHUB_REPO_URL_INFRA = "${env.GITHUB_REPO_URL_INFRA ?: 'https://github.com/EduardoAzaldegui/banxk-laboraotrio-02.git'}"
+        GITHUB_BRANCH_INFRA = "${env.GITHUB_BRANCH_INFRA ?: 'main'}"
+    }
+
+    stages {
+        // 1. Diagnóstico del Entorno
+        stage('🔍 Verificar Entorno Docker') {
+            steps {
+                script {
+                    sh '''
+                    echo "=== DIAGNÓSTICO DE INFRAESTRUCTURA ==="
+                    echo "🐳 Docker Version:"
+                    docker --version
+                    echo "🐙 Docker Compose Version:"
+                    docker compose version
+                    echo "📂 Directorio de trabajo: $(pwd)"
+                    echo "======================================"
+                    '''
+                }
+            }
+        }
+
+        // 2. Preparación
+        stage('🧹 Preparación') {
+            steps {
+                echo "🚀 Iniciando despliegue Infraestructura: ${GITHUB_REPO_URL_INFRA}"
+                echo "🌿 Rama: ${GITHUB_BRANCH_INFRA}"
+                cleanWs()
+            }
+        }
+
+        // 3. Clonar Repositorio (TU VERSIÓN MANUAL)
+        stage('📥 Clonar Repositorio') {
+            steps {
+                script {
+                    echo "📦 Clonando repositorio..."
+                    git branch: GITHUB_BRANCH_INFRA,
+                        credentialsId: 'github-token', // Asegúrate que este ID coincida con tu jenkins.yaml
+                        url: GITHUB_REPO_URL_INFRA
+                    
+                    // Mostramos el último commit para tener trazabilidad en los logs
+                    sh 'git log -1 --oneline'
+                }
+            }
+        }
+
+        // 4. Chequeos previos
+        stage('🔧 Pre-Deploy Checks') {
+            steps {
+                dir(PROJECT_PATH) {
+                    script {
+                        echo "🛠️ Verificando archivos de configuración..."
+                        sh '''
+                        if [ -f "docker-compose.yml" ]; then
+                            echo "✅ docker-compose.yml encontrado."
+                        else
+                            echo "❌ ERROR: No se encontró docker-compose.yml en ${PROJECT_PATH}"
+                            ls -la
+                            exit 1
+                        fi
+                        '''
+                    }
+                }
+            }
+        }
+
+        // 5. Limpieza Profunda
+        stage('🧹 Limpieza Docker Profunda') {
+            steps {
+                dir(PROJECT_PATH) {
+                    script {
+                        echo "🧹 EJECUTANDO LIMPIEZA DE CONTENEDORES E IMÁGENES..."
+                        sh """
+                        # Bajamos servicios y borramos volúmenes para inicio limpio
+                        echo "🛑 Deteniendo stack '${PROJECT_NAME}'..."
+                        docker compose -p ${PROJECT_NAME} down -v --remove-orphans || true
+
+                        # Limpieza general de mantenimiento
+                        docker container prune -f
+                        
+                        echo "=== ESTADO DOCKER TRAS LIMPIEZA ==="
+                        docker ps -a | grep ${PROJECT_NAME} || echo "✅ Todo limpio."
+                        """
+                    }
+                }
+            }
+        }
+
+        // 6. Despliegue
+        stage('🚀 Desplegar Infraestructura') {
+            steps {
+                dir(PROJECT_PATH) {
+                    script {
+                        echo "🏗️ Levantando servicios con Docker Compose..."
+                        // --build asegura que si cambiaron las imágenes base, se actualicen
+                        sh "docker compose -p ${PROJECT_NAME} up -d --build"
+                        
+                        echo "📜 Logs iniciales:"
+                        sh "docker compose -p ${PROJECT_NAME} logs --tail=10"
+                    }
+                }
+            }
+        }
+
+        // 7. Health Check
+        stage('🏥 Health Check') {
+            steps {
+                script {
+                    echo "⏳ Iniciando verificación de salud..."
+                    sleep 30 // Tiempo de gracia para Kafka/Sonar
+                    
+                    dir(PROJECT_PATH) {
+                        sh '''
+                        MAX_RETRIES=12
+                        attempt=1
+                        healthy=false
+                        
+                        echo "🔍 Verificando estado de contenedores críticos..."
+                        
+                        while [ $attempt -le $MAX_RETRIES ]; do
+                            # Verificamos si Kafka y Mongo están corriendo
+                            KAFKA_STATE=$(docker inspect -f '{{.State.Status}}' kafka 2>/dev/null || echo "not_found")
+                            MONGO_STATE=$(docker inspect -f '{{.State.Status}}' mongo-bank 2>/dev/null || echo "not_found")
+                            
+                            echo "⏱️ Intento $attempt/$MAX_RETRIES - Kafka: $KAFKA_STATE | Mongo: $MONGO_STATE"
+                            
+                            if [ "$KAFKA_STATE" = "running" ] && [ "$MONGO_STATE" = "running" ]; then
+                                echo "✅ Contenedores principales RUNNING."
+                                healthy=true
+                                break
+                            fi
+                            
+                            echo "💤 Esperando 10 segundos..."
+                            sleep 10
+                            attempt=$((attempt + 1))
+                        done
+                        
+                        if [ "$healthy" != "true" ]; then
+                            echo "❌ TIMEOUT: Servicios no iniciaron correctamente."
+                            docker compose -p ${PROJECT_NAME} logs --tail=50
+                            exit 1
+                        fi
+                        
+                        echo "🎉 Infraestructura operativa."
+                        '''
+                    }
+                }
+            }
+        }
+        
+        // 8. Visualizar Logs Finales
+        stage('📋 Logs Finales') {
+             steps {
+                 dir(PROJECT_PATH) {
+                     script {
+                         echo "📝 Estado final de los contenedores:"
+                         sh "docker compose -p ${PROJECT_NAME} ps"
+                     }
+                 }
+             }
+        }
+    }
+
+    post {
+        always {
+            cleanWs()
+        }
+        
+        success {
+            script {
+                echo """
+                ✅ DEPLOY INFRAESTRUCTURA EXITOSO ✅
+                ======================= RESUMEN =======================
+                🎯 Proyecto:        ${PROJECT_NAME}
+                🌿 Rama:            ${GITHUB_BRANCH_INFRA}
+                ⏱️ Tiempo:          ${currentBuild.durationString}
+                ======================================================
+                """
+            }
+        }
+
+        failure {
+            script {
+                echo """
+                ❌ FALLA EN DEPLOY INFRAESTRUCTURA ❌
+                ====================== DIAGNÓSTICO ===================
+                Build:     #${BUILD_NUMBER}
+                Error:     ${currentBuild.result}
+                ======================================================
+                """
+                dir(PROJECT_PATH) {
+                    sh "docker compose -p ${PROJECT_NAME} logs --tail=50 || true"
+                }
+            }
+        }
+    }
+}
