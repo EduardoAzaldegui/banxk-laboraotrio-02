@@ -30,10 +30,9 @@ credentials:
               id: "github-webhook-secret"
               secret: "${GITHUB_WEBHOOK_SECRET}"
               description: "GitHub Webhook Secret"
-          
 
 jobs:
-    - script: |
+  - script: >
       pipelineJob('deploy-infrastructure') {
         description('Despliegue de Infraestructura Base')
         properties {
@@ -54,7 +53,7 @@ jobs:
                 printContributedVariables(true)
                 printPostContent(true)
                 regexpFilterText('\$ref')
-                regexpFilterExpression("^refs/heads/${GITHUB_BRANCH_INFRA}\$")
+                regexpFilterExpression("^refs/heads/${GITHUB_BRANCH_INFRA} .*bank-infrastructure/.*")
               }
             }
           }
@@ -75,11 +74,9 @@ jobs:
         }
       }
 
-
-  - script: |
+  - script: >
       pipelineJob('deploy-card-ops-producer') {
         description('Microservicio Producer (Kafka/Avro)')
-        
         properties {
           githubProjectProperty {
             projectUrlStr("${GITHUB_REPO_URL_PRODUCER}")
@@ -98,7 +95,7 @@ jobs:
                 printContributedVariables(true)
                 printPostContent(true)
                 regexpFilterText('\$ref')
-                regexpFilterExpression("^refs/heads/${GITHUB_BRANCH_PRODUCER}\$")
+                regexpFilterExpression("^refs/heads/${GITHUB_BRANCH_PRODUCER} .*card-ops-producer/.*")
               }
             }
           }
@@ -119,9 +116,7 @@ jobs:
         }
       }
 
-
-
-  - script: |
+  - script: >
       pipelineJob('deploy-dispatch-consumer') {
         description('Microservicio Consumer (RxJava/Mongo)')
         properties {
@@ -142,7 +137,7 @@ jobs:
                 printContributedVariables(true)
                 printPostContent(true)
                 regexpFilterText('\$ref')
-                regexpFilterExpression("^refs/heads/${GITHUB_BRANCH_CONSUMER}\$")
+                regexpFilterExpression("^refs/heads/${GITHUB_BRANCH_CONSUMER} .*dispatch-consumer/.*")
               }
             }
           }
@@ -158,13 +153,10 @@ jobs:
                 branches("*/${GITHUB_BRANCH_CONSUMER}")
               }
             }
-            scriptPath("dispatch-consumer")
+            scriptPath("dispatch-consumer/Jenkinsfile")
           }
         }
       }
-
-
-
 
 tool:
   git:
@@ -177,7 +169,7 @@ security:
     approvedSignatures: ["**"]
     forceSandbox: false
 
-unclassified:      
+unclassified:
   location:
     url: "${JENKINS_URL}"
   globalLibraries:
