@@ -1,0 +1,185 @@
+{
+	"info": {
+		"_postman_id": "b3e5a2d1-5f4a-4e1b-9c8d-1a2b3c4d5e6f",
+		"name": "Taller BankOps (Producer & Consumer)",
+		"description": "Colección para probar el flujo de reemplazo de tarjetas basado en eventos (Kafka, Redis, Mongo).",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "1. Card Ops Producer (Port 8085)",
+			"item": [
+				{
+					"name": "1. Crear Reemplazo - CASO NORMAL (Intento 1)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"requestId\": \"REQ-1001\",\n    \"customerId\": \"CUST-999\",\n    \"cardPANMasked\": \"4111********1111\",\n    \"reasonCode\": \"LOST\",\n    \"priority\": \"NORMAL\",\n    \"branchCode\": \"BR-001\",\n    \"deliveryAddress\": \"Av. Javier Prado 123, Lima\",\n    \"correlationId\": \"CORR-abc-123\",\n    \"status\": \"REQUESTED\"\n}"
+						},
+						"url": {
+							"raw": "http://localhost:8085/api/card-replacements",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8085",
+							"path": [
+								"api",
+								"card-replacements"
+							]
+						},
+						"description": "Envía una solicitud nueva. Si el ID no está en Redis, el sistema lo marca como 'First Attempt'[cite: 730]."
+					},
+					"response": []
+				},
+				{
+					"name": "2. Crear Reemplazo - PRIORIDAD ALTA (Datos Variados)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"requestId\": \"REQ-2002\",\n    \"customerId\": \"CUST-888\",\n    \"cardPANMasked\": \"5555********2222\",\n    \"reasonCode\": \"DAMAGED\",\n    \"priority\": \"HIGH\",\n    \"branchCode\": \"BR-005\",\n    \"deliveryAddress\": \"Calle Las Begonias 456, San Isidro\",\n    \"correlationId\": \"CORR-xyz-789\",\n    \"status\": \"REQUESTED\"\n}"
+						},
+						"url": {
+							"raw": "http://localhost:8085/api/card-replacements",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8085",
+							"path": [
+								"api",
+								"card-replacements"
+							]
+						},
+						"description": "Prueba con datos diferentes (High Priority, Damaged) para verificar que el mapeo Avro funciona correctamente."
+					},
+					"response": []
+				},
+				{
+					"name": "3. Simular Reintento (Intento 2 - Mismo ID)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"requestId\": \"REQ-1001\",\n    \"customerId\": \"CUST-999\",\n    \"cardPANMasked\": \"4111********1111\",\n    \"reasonCode\": \"LOST\",\n    \"priority\": \"NORMAL\",\n    \"branchCode\": \"BR-001\",\n    \"deliveryAddress\": \"Av. Javier Prado 123, Lima\",\n    \"correlationId\": \"CORR-abc-123\",\n    \"status\": \"RETRY_REQUEST\"\n}"
+						},
+						"url": {
+							"raw": "http://localhost:8085/api/card-replacements",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8085",
+							"path": [
+								"api",
+								"card-replacements"
+							]
+						},
+						"description": "Envía el MISMO requestId (REQ-1001) que el paso 1. El Orchestrator debería detectar la llave en Redis y aplicar la 'SecondTimePolicy'[cite: 703, 730]."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "2. Dispatch Consumer (Port 8082)",
+			"item": [
+				{
+					"name": "4. Consultar Evento (Éxito)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8082/api/events?requestId=REQ-1001",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8082",
+							"path": [
+								"api",
+								"events"
+							],
+							"query": [
+								{
+									"key": "requestId",
+									"value": "REQ-1001"
+								}
+							]
+						},
+						"description": "Consulta MongoDB a través del endpoint reactivo. Debería devolver el objeto procesado[cite: 81]."
+					},
+					"response": []
+				},
+				{
+					"name": "5. Consultar Evento (No Encontrado - 404)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8082/api/events?requestId=REQ-9999",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8082",
+							"path": [
+								"api",
+								"events"
+							],
+							"query": [
+								{
+									"key": "requestId",
+									"value": "REQ-9999"
+								}
+							]
+						},
+						"description": "Prueba el manejo de errores 'switchIfEmpty'. Debería retornar 404 Not Found[cite: 85]."
+					},
+					"response": []
+				},
+				{
+					"name": "6. Health Check",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8082/api/health",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8082",
+							"path": [
+								"api",
+								"health"
+							]
+						},
+						"description": "Verifica que el microservicio consumidor esté levantado[cite: 89]."
+					},
+					"response": []
+				}
+			]
+		}
+	]
+}
