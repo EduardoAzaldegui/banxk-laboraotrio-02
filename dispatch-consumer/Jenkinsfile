@@ -4,7 +4,7 @@ pipeline {
   environment {
     // === CONFIGURACIÓN DEL DIRECTORIO ===
     // Nombre de la carpeta donde está el código (ej. card-ops-producer)
-    PROJECT_DIRECTORY = "card-ops-producer"
+    PROJECT_DIRECTORY = "dispatch-consumer"
 
     // Variables de Jenkins
     GITHUB_REPO_URL_PRODUCER = "${GITHUB_REPO_URL_PRODUCER}"
