@@ -56,9 +56,10 @@ services:
 
   # --- CACHÉ Y BASE DE DATOS ---
   redis:
-    image: redis:6-alpine
+    image: redis/redis-stack-server:7.2.0-v14
     container_name: redis-bank
-    ports: [ "6379:6379" ]
+    ports:
+      - "6379:6379"
     volumes:
       - redis_data:/data
     networks:
@@ -70,7 +71,12 @@ services:
       --maxmemory 8gb
       --maxmemory-policy allkeys-lfu
       --dir /data
-
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "Redis-produccion", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      
   mongodb:
     image: mongo:6
     container_name: mongo-bank

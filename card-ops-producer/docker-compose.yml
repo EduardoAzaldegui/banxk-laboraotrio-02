@@ -1,9 +1,14 @@
-version: "3.9"
+
+volumes:
+  app-logs-shared:
+    external: true
+  cw-config:
+    external: true
+
 
 services:
   java-app:
     container_name: java-app
-    hostname: java-app
     build:
       context: .
       dockerfile: Dockerfile
@@ -11,9 +16,13 @@ services:
         - JAVA_VERSION=${JAVA_VERSION:-17}
     image: java-app:${JAVA_VERSION}
     ports:
-     - "8085:8085"
-    networks:
-      - bank-network
+      - "${APP_PORT:-8085}:8085"  # <-- Puerto configurable: HOST:CONTAINER
+    volumes:
+      - app-logs-shared:/app/logs:rw # <-- ¡MONTAMOS LA CARPETA DE LOGS EN EL VOLUMEN COMPARTIDO
+      # Si tu app escribe logs en /app/logs dentro del contenedor, aparecerán en ./logs del host.
+    environment:
+      - SPRING_PROFILES_ACTIVE=${APP_ENVIRONMENT:-production}
+    # Healthcheck simple para apps que no son web (como nuestro ejemplo)
     healthcheck:
       test: ["CMD", "curl", "-f", "-H", "User-Agent: Docker", "http://localhost:8085/actuator/health"] # Verifica que el proceso Java esté corriendo
       interval: 10s
@@ -22,9 +31,3 @@ services:
       start_period: 30s
     restart: unless-stopped
     user: root
-
-
-networks:
-  bank-network:
-    external: true
-    name: bank-network
