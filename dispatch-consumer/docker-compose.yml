@@ -40,7 +40,7 @@ services:
       - bank-network
     # Healthcheck simple para apps que no son web (como nuestro ejemplo)
     healthcheck:
-      test: ["CMD", "curl", "-f", "-H", "User-Agent: Docker", "http://localhost:8085/actuator/health"] # Verifica que el proceso Java esté corriendo
+      test: ["CMD", "curl", "-f", "-H", "User-Agent: Docker", "http://localhost:8082/actuator/health"] # Verifica que el proceso Java esté corriendo
       interval: 10s
       timeout: 5s
       retries: 5
