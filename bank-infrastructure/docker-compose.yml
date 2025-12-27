@@ -1,5 +1,13 @@
 version: "3.9"
 
+
+# Definimos una red para que todos se vean entre sí por nombre
+networks:
+  bank-network:
+    name: bank-network
+    driver: bridge
+
+
 services:
   # --- INFRAESTRUCTURA KAFKA ---
   zookeeper:
@@ -91,10 +99,7 @@ services:
       - bank-network
 
 
-# Definimos una red para que todos se vean entre sí por nombre
-networks:
-  bank-network:
-    driver: bridge
+
 
 # Definimos volúmenes para no perder datos al reiniciar
 volumes:

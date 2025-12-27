@@ -10,10 +10,7 @@ services:
       args:
         - JAVA_VERSION=${JAVA_VERSION:-17}
     image: java-app:${JAVA_VERSION}
-    environment:
-      - HOSTNAME=java-app
-    ports:
-     - "8085:8085"
+    network_mode: "host"
     healthcheck:
       test: ["CMD", "curl", "-f", "-H", "User-Agent: Docker", "http://localhost:8085/actuator/health"] # Verifica que el proceso Java esté corriendo
       interval: 10s
