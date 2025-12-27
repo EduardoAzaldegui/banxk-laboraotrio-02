@@ -10,7 +10,10 @@ services:
       args:
         - JAVA_VERSION=${JAVA_VERSION:-17}
     image: java-app:${JAVA_VERSION}
-    network_mode: "host"
+    ports:
+     - "8085:8085"
+    networks:
+      - bank-network
     healthcheck:
       test: ["CMD", "curl", "-f", "-H", "User-Agent: Docker", "http://localhost:8085/actuator/health"] # Verifica que el proceso Java esté corriendo
       interval: 10s
@@ -19,3 +22,9 @@ services:
       start_period: 30s
     restart: unless-stopped
     user: root
+
+
+networks:
+  bank-network:
+    external: true
+    name: bank-network
