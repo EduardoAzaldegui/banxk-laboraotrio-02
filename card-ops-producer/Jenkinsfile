@@ -42,7 +42,7 @@ pipeline {
     stage('📥 Clonar Repositorio') {
       steps {
         script {
-          echo "📦 Clonando repositorio..."
+          echo "📦 Clonando repositorio...2"
           git branch: GITHUB_BRANCH_PRODUCER,
               credentialsId: 'github-token',
               url: GITHUB_REPO_URL_PRODUCER
