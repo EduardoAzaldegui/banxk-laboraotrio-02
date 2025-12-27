@@ -8,14 +8,13 @@ services:
       dockerfile: Dockerfile
     image: verdugox/dispatch-consumer:latest
     container_name: dispatch-consumer
-    depends_on: [ kafka, schema-registry, redis, mongodb ]
     environment:
       SPRING_PROFILES_ACTIVE: docker
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SCHEMA_REGISTRY_URL: http://schema-registry:8081
       REDIS_HOST: redis
       # Agregamos autenticación porque tu Mongo tiene root/root
-      MONGODB_URI: mongodb://root:root@mongodb:27017/bank_db?authSource=admin
+      MONGODB_URI: mongodb://root:root@mongodb:27018/bank_db?authSource=admin
     ports: [ "8082:8082" ]
     networks:
       - bank-network

@@ -19,7 +19,7 @@ public class EventMapper {
                 .setBranchCode(dto.getBranchCode())
                 .setDeliveryAddress(dto.getDeliveryAddress())
                 // Conversión clave Instant -> Long para Avro
-                .setRequestedAt(dto.getRequestedAt().toEpochMilli())
+                .setRequestedAt(dto.getRequestedAt())
                 .setAttemptNumber(attemptNumber)
                 .setCorrelationId(dto.getCorrelationId())
                 .setStatus(dto.getStatus())

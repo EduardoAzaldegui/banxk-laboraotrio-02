@@ -2,12 +2,17 @@
 package com.bank.card_ops_producer.api.dto;
 
 import jakarta.validation.constraints.NotBlank;
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
+
 import java.time.Instant;
 
 @Data
 @Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class CardReplacementRequestDto {
     @NotBlank private String requestId;
     @NotBlank private String customerId;

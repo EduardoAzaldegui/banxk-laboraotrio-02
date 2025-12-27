@@ -8,10 +8,9 @@ services:
       dockerfile: Dockerfile
     image: verdugox/card-ops-producer:latest
     container_name: card-ops-producer
-    depends_on: [ kafka, schema-registry, redis ]
     environment:
       SPRING_PROFILES_ACTIVE: docker
-      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      KAFKA_BOOTSTRAP_SERVERS: localhost:9092
       SCHEMA_REGISTRY_URL: http://schema-registry:8081
       REDIS_HOST: redis
     ports:

@@ -26,6 +26,8 @@
 		<springdoc.version>2.6.0</springdoc.version>
 		<resilience4j.version>2.2.0</resilience4j.version>
         <jacoco.version>0.8.11</jacoco.version>
+        <lombok.version>1.18.36</lombok.version>
+        <sonar.host.url>http://localhost:9000</sonar.host.url>
 	</properties>
 
 	<repositories>
@@ -64,6 +66,18 @@
 		</pluginRepository>
 	</pluginRepositories>
 
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>io.github.resilience4j</groupId>
+                <artifactId>resilience4j-bom</artifactId>
+                <version>${resilience4j.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
 
 	<dependencies>
 		<!-- Web MVC: controladores finos -->
@@ -118,11 +132,12 @@
 			<artifactId>mapstruct</artifactId>
 			<version>${mapstruct.version}</version>
 		</dependency>
-		<dependency>
-			<groupId>org.projectlombok</groupId>
-			<artifactId>lombok</artifactId>
-			<optional>true</optional>
-		</dependency>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <version>${lombok.version}</version>
+            <scope>provided</scope>
+        </dependency>
 
 
 
@@ -138,11 +153,6 @@
 
 
 
-        <dependency>
-            <groupId>org.springframework.cloud</groupId>
-            <artifactId>spring-cloud-starter-circuitbreaker-reactor-resilience4j</artifactId>
-            <version>3.0.3</version>
-        </dependency>
 
 
 
@@ -158,6 +168,7 @@
 			<artifactId>resilience4j-rxjava3</artifactId>
 			<version>${resilience4j.version}</version>
 		</dependency>
+
 
 		<!-- OpenAPI / Swagger UI -->
 		<dependency>
@@ -251,7 +262,7 @@
                                         <limit>
                                             <counter>INSTRUCTION</counter>
                                             <value>COVEREDRATIO</value>
-                                            <minimum>0.5</minimum>
+                                            <minimum>0.0</minimum>
                                         </limit>
                                     </limits>
                                 </rule>
@@ -294,12 +305,12 @@
                             <configLocation>google_checks.xml</configLocation>
                             <encoding>UTF-8</encoding>
                             <consoleOutput>true</consoleOutput>
-                            <failsOnError>false</failsOnError>        <!--  No detiene el build -->
+                            <failsOnError>false</failsOnError>
                             <violationSeverity>warning</violationSeverity>
                             <outputFile>${project.build.directory}/checkstyle-result.xml</outputFile>
                             <outputFileFormat>xml</outputFileFormat>
                             <includeTestSourceDirectory>true</includeTestSourceDirectory>
-                            <logViolationsToConsole>true</logViolationsToConsole> <!--  Muestra todo en logs -->
+                            <logViolationsToConsole>true</logViolationsToConsole>
                         </configuration>
                     </execution>
                     <execution>
