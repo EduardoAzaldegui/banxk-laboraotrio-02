@@ -24,7 +24,18 @@ services:
       - app-logs-shared:/app/logs:rw # <-- ¡MONTAMOS LA CARPETA DE LOGS EN EL VOLUMEN COMPARTIDO
       # Si tu app escribe logs en /app/logs dentro del contenedor, aparecerán en ./logs del host.
     environment:
-      - SPRING_PROFILES_ACTIVE=${APP_ENVIRONMENT:-production}
+       # --- CAMBIO CRÍTICO: USAR NOMBRES DE CONTENEDORES ---
+
+       # Redis: Usamos 'redis-bank' (el container_name del otro archivo)
+       - REDIS_HOST=redis-bank
+       - REDIS_PORT=6379
+
+       # Kafka: Usamos 'kafka' y el puerto INTERNO (9092)
+       - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+       - SCHEMA_REGISTRY_URL=http://schema-registry:8081
+
+       # Mongo: Usamos 'mongo-bank' y el puerto INTERNO (27017)
+       - MONGODB_URI=mongodb://root:root@mongo-bank:27017/bank?authSource=admin
     networks:
       - bank-network
     # Healthcheck simple para apps que no son web (como nuestro ejemplo)

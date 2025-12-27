@@ -4,7 +4,9 @@ version: "3.9"
 # Definimos una red para que todos se vean entre sí por nombre
 networks:
   bank-network:
-    external: true
+    name: bank-network
+    driver: bridge
+
 
 services:
   # --- INFRAESTRUCTURA KAFKA ---
