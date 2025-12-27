@@ -12,7 +12,8 @@ services:
     image: java-app:${JAVA_VERSION}
     environment:
       - HOSTNAME=java-app
-    network_mode: "host"
+    ports:
+      - "8085:8085"  # Mapeo explícito: Puerto PC -> Puerto Contenedor
     healthcheck:
       test: ["CMD", "curl", "-f", "-H", "User-Agent: Docker", "http://localhost:8085/actuator/health"] # Verifica que el proceso Java esté corriendo
       interval: 10s
