@@ -150,7 +150,7 @@ pipeline {
               echo "🚀 Desplegando desde ${PROJECT_DIRECTORY}..."
 
               // Eliminamos contenedor forzosamente por nombre si existe
-              sh 'docker rm -f java-app 2>/dev/null || true'
+              sh 'docker rm -f producer-app 2>/dev/null || true'
 
               sh '''
                 echo "📦 IP configurada: ${PEKKO_HOST}"
@@ -160,7 +160,7 @@ pipeline {
                 docker compose build --no-cache --pull --build-arg JAVA_VERSION=${JAVA_VERSION}
 
                 # Levantar servicio
-                docker compose up -d java-app
+                docker compose up -d producer-app
 
                 echo "✅ Aplicación desplegada en puerto ${APP_PORT}"
               '''
@@ -181,10 +181,10 @@ pipeline {
                 attempt=1
 
                 # Obtener ID del contenedor usando el compose del directorio actual
-                CONTAINER_ID=$(docker compose ps -q java-app)
+                CONTAINER_ID=$(docker compose ps -q producer-app)
 
                 if [ -z "$CONTAINER_ID" ]; then
-                   echo "❌ No se encontró el contenedor java-app."
+                   echo "❌ No se encontró el contenedor producer-app."
                    exit 1
                 fi
 
@@ -199,7 +199,7 @@ pipeline {
 
                   if [ "$status" = "unhealthy" ]; then
                     echo "❌ App marcada como UNHEALTHY."
-                    docker compose logs --tail=50 java-app
+                    docker compose logs --tail=50 producer-app
                     exit 1
                   fi
 
@@ -208,7 +208,7 @@ pipeline {
                 done
 
                 echo "❌ Timeout esperando health check."
-                docker compose logs --tail=50 java-app
+                docker compose logs --tail=50 producer-app
                 exit 1
               '''
             }
@@ -219,11 +219,11 @@ pipeline {
     stage('📋 Ver Logs en Servidor') {
       steps {
         // No necesitamos estar en el directorio para esto si usamos docker cp con el nombre del contenedor,
-        // pero por consistencia lo dejamos, aunque el contenedor 'java-app' es global en docker.
+        // pero por consistencia lo dejamos, aunque el contenedor 'producer-app' es global en docker.
         script {
            sh '''
              mkdir -p /shared-logs/pluggyLogs/build/
-             docker cp java-app:/app/logs/. /shared-logs/pluggyLogs/build/ 2>/dev/null || echo "ℹ️ Sin logs nuevos"
+             docker cp producer-app:/app/logs/. /shared-logs/pluggyLogs/build/ 2>/dev/null || echo "ℹ️ Sin logs nuevos"
              ls -la /shared-logs/pluggyLogs/build/ || true
            '''
         }
@@ -247,7 +247,7 @@ pipeline {
             // Entramos al directorio para sacar logs del compose específico
             dir(env.PROJECT_DIRECTORY) {
                 echo "❌ Falla en despliegue"
-                sh 'docker compose logs --tail=100 java-app || true'
+                sh 'docker compose logs --tail=100 producer-app || true'
                 sh 'docker compose ps -a || true'
             }
         }

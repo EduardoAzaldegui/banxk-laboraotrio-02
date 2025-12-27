@@ -10,8 +10,8 @@ networks:
     external: true
 
 services:
-  java-app:
-    container_name: java-app
+  producer-app:
+    container_name: producer-app
     build:
       context: .
       dockerfile: Dockerfile
