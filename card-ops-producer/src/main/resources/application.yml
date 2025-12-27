@@ -15,7 +15,7 @@ spring:
 
 kafka:
   topic: bank.card.replacements.v1
-  schema-registry-url: ${SCHEMA_REGISTRY_URL:http://192.168.18.19:8081}
+  schema-registry-url: ${SCHEMA_REGISTRY_URL:http://localhost:8081}
 
 management:
   endpoints:

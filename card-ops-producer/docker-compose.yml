@@ -5,6 +5,9 @@ volumes:
   cw-config:
     external: true
 
+networks:
+  bank-network:
+    external: true
 
 services:
   java-app:
@@ -22,6 +25,8 @@ services:
       # Si tu app escribe logs en /app/logs dentro del contenedor, aparecerán en ./logs del host.
     environment:
       - SPRING_PROFILES_ACTIVE=${APP_ENVIRONMENT:-production}
+    networks:
+      - bank-network
     # Healthcheck simple para apps que no son web (como nuestro ejemplo)
     healthcheck:
       test: ["CMD", "curl", "-f", "-H", "User-Agent: Docker", "http://localhost:8085/actuator/health"] # Verifica que el proceso Java esté corriendo
