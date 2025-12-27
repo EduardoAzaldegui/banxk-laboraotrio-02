@@ -1,0 +1,256 @@
+pipeline {
+  agent any
+
+  environment {
+    // === CONFIGURACIÓN DEL DIRECTORIO ===
+    // Nombre de la carpeta donde está el código (ej. card-ops-producer)
+    PROJECT_DIRECTORY = "card-ops-producer"
+
+    // Variables de Jenkins
+    GITHUB_REPO_URL_PRODUCER = "${GITHUB_REPO_URL_PRODUCER}"
+    GITHUB_BRANCH_PRODUCER = "${GITHUB_BRANCH_PRODUCER}"
+    APP_ENVIRONMENT = "${APP_ENVIRONMENT}"
+    APP_PORT = "8082"
+    JAVA_VERSION = "${JAVA_VERSION}"
+    COMPOSE_FILE = "${APP_COMPOSE_FILE}"
+  }
+
+  stages {
+
+    stage('🔍 Verificar Entorno Java') {
+        steps {
+            script {
+                // Esto puede correr en la raíz, no afecta
+                sh '''
+                echo "=== DIAGNÓSTICO DE JAVA ==="
+                java -version
+                echo "JAVA_HOME: $JAVA_HOME"
+                echo "==========================="
+                '''
+            }
+        }
+    }
+
+    stage('🔍 Preparación') {
+      steps {
+        echo "🚀 Iniciando despliegue: ${GITHUB_REPO_URL_PRODUCER}"
+        echo "📂 Directorio de trabajo: ${PROJECT_DIRECTORY}"
+        cleanWs() // Limpia todo el workspace
+      }
+    }
+
+    stage('📥 Clonar Repositorio') {
+      steps {
+        script {
+          // Clonamos en la raíz del workspace (esto crea la carpeta card-ops-producer)
+          echo "📦 Clonando repositorio..."
+          git branch: GITHUB_BRANCH_PRODUCER,
+              credentialsId: 'github-token',
+              url: GITHUB_REPO_URL_PRODUCER
+
+          sh 'ls -la' // Para verificar que la carpeta se bajó
+        }
+      }
+    }
+
+    stage('🔧 Pre-Deploy') {
+      steps {
+        // USAMOS dir() PARA ENTRAR A LA CARPETA
+        dir(env.PROJECT_DIRECTORY) {
+            script {
+              echo "🛠️ Preparando despliegue en: ${PROJECT_DIRECTORY}..."
+              sh '''
+                echo "📋 Verificando estructura en $(pwd)..."
+                ls -la
+
+                if [ -f "pom.xml" ] || [ -f "build.gradle" ]; then
+                  echo "✅ Archivo de construcción encontrado"
+                else
+                  echo "❌ ERROR: No se encontró pom.xml/build.gradle en $(pwd)"
+                  exit 1
+                fi
+
+                if [ -f "docker-compose.yml" ]; then
+                  echo "✅ docker-compose.yml encontrado"
+                else
+                  echo "❌ ERROR: docker-compose.yml no encontrado en $(pwd)"
+                  exit 1
+                fi
+
+                # Verificar puerto
+                echo "🔍 Verificando puerto ${APP_PORT}..."
+                if netstat -tuln | grep -q ":${APP_PORT}"; then
+                  echo "⚠️ Puerto ${APP_PORT} ya en uso (se liberará al bajar docker)"
+                else
+                  echo "✅ Puerto ${APP_PORT} disponible"
+                fi
+              '''
+
+              sh '''
+                echo "🛑 Deteniendo servicios existentes (si los hay)..."
+                # Es importante correr esto aquí para que encuentre el docker-compose.yml correcto
+                docker compose down || echo "No services running"
+              '''
+            }
+        }
+      }
+    }
+
+    stage('🧹 Limpieza Docker') {
+      steps {
+        dir(env.PROJECT_DIRECTORY) {
+            script {
+              echo "🧹 Limpiando recursos Docker..."
+              sh '''
+                # Parar y eliminar contenedores asociados a este compose
+                docker compose down --remove-orphans --rmi all || true
+
+                # Limpieza general segura
+                docker container prune -f
+                docker image prune -a -f
+              '''
+            }
+        }
+      }
+    }
+
+    stage('🏗️ Construir Aplicación Java') {
+      steps {
+        dir(env.PROJECT_DIRECTORY) {
+            script {
+              echo "📦 Construyendo JAR dentro de ${PROJECT_DIRECTORY}..."
+              sh '''
+                if [ -f "pom.xml" ]; then
+                  echo "🔨 Usando Maven..."
+                  chmod +x ./mvnw || true
+                  # Usamos ./mvnw si existe, sino mvn del sistema
+                  if [ -f "./mvnw" ]; then
+                    ./mvnw clean package -DskipTests --batch-mode
+                  else
+                    mvn clean package -DskipTests --batch-mode
+                  fi
+                  ls -la target/*.jar
+                elif [ -f "build.gradle" ]; then
+                  echo "🔨 Usando Gradle..."
+                  chmod +x ./gradlew
+                  ./gradlew build -x test
+                  ls -la build/libs/*.jar
+                fi
+              '''
+            }
+        }
+      }
+    }
+
+
+    stage('🚀 Desplegar App Java') {
+      steps {
+        dir(env.PROJECT_DIRECTORY) {
+            script {
+              echo "🚀 Desplegando desde ${PROJECT_DIRECTORY}..."
+
+              // Eliminamos contenedor forzosamente por nombre si existe
+              sh 'docker rm -f java-app 2>/dev/null || true'
+
+              sh '''
+                echo "📦 IP configurada: ${PEKKO_HOST}"
+                export PEKKO_HOST=${PEKKO_HOST}
+
+                # Construir imagen fresca
+                docker compose build --no-cache --pull --build-arg JAVA_VERSION=${JAVA_VERSION}
+
+                # Levantar servicio
+                docker compose up -d java-app
+
+                echo "✅ Aplicación desplegada en puerto ${APP_PORT}"
+              '''
+            }
+        }
+      }
+    }
+
+    stage('🏥 Health Check') {
+      steps {
+        // Necesitamos estar en el directorio para usar "docker compose logs" correctamente
+        dir(env.PROJECT_DIRECTORY) {
+            script {
+              echo "🔍 Health Check..."
+              sh '''
+                echo "⏳ Esperando endpoint /actuator/health..."
+                MAX_RETRIES=18
+                attempt=1
+
+                # Obtener ID del contenedor usando el compose del directorio actual
+                CONTAINER_ID=$(docker compose ps -q java-app)
+
+                if [ -z "$CONTAINER_ID" ]; then
+                   echo "❌ No se encontró el contenedor java-app."
+                   exit 1
+                fi
+
+                while [ $attempt -le $MAX_RETRIES ]; do
+                  status=$(docker inspect -f '{{.State.Health.Status}}' $CONTAINER_ID 2>/dev/null || echo "unknown")
+                  echo "Estado: $status"
+
+                  if [ "$status" = "healthy" ]; then
+                    echo "✅ App saludable."
+                    exit 0
+                  fi
+
+                  if [ "$status" = "unhealthy" ]; then
+                    echo "❌ App marcada como UNHEALTHY."
+                    docker compose logs --tail=50 java-app
+                    exit 1
+                  fi
+
+                  sleep 10
+                  attempt=$((attempt + 1))
+                done
+
+                echo "❌ Timeout esperando health check."
+                docker compose logs --tail=50 java-app
+                exit 1
+              '''
+            }
+        }
+      }
+    }
+
+    stage('📋 Ver Logs en Servidor') {
+      steps {
+        // No necesitamos estar en el directorio para esto si usamos docker cp con el nombre del contenedor,
+        // pero por consistencia lo dejamos, aunque el contenedor 'java-app' es global en docker.
+        script {
+           sh '''
+             mkdir -p /shared-logs/pluggyLogs/build/
+             docker cp java-app:/app/logs/. /shared-logs/pluggyLogs/build/ 2>/dev/null || echo "ℹ️ Sin logs nuevos"
+             ls -la /shared-logs/pluggyLogs/build/ || true
+           '''
+        }
+      }
+    }
+  }
+
+  post {
+    always {
+      script {
+        cleanWs()
+      }
+    }
+    success {
+        script {
+            echo "✅ Despliegue de ${PROJECT_DIRECTORY} Exitoso"
+        }
+    }
+    failure {
+        script {
+            // Entramos al directorio para sacar logs del compose específico
+            dir(env.PROJECT_DIRECTORY) {
+                echo "❌ Falla en despliegue"
+                sh 'docker compose logs --tail=100 java-app || true'
+                sh 'docker compose ps -a || true'
+            }
+        }
+    }
+  }
+}
