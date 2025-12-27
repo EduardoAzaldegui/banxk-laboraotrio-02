@@ -1,25 +1,29 @@
-# ETAPA 1: Construcción (Build)
-FROM maven:3.9.6-eclipse-temurin-17 AS build
-WORKDIR /app
+# Usa un argumento para definir la versión de Java por default si no se pasa
+ARG JAVA_VERSION=17
 
-# Copiamos primero los archivos de definición para aprovechar el caché de capas de Docker
-COPY pom.xml .
-COPY src ./src
+# Usa la imagen oficial de OpenJDK
+FROM openjdk:25-ea-${JAVA_VERSION}-slim-bullseye
 
-# Ejecutamos el empaquetado (saltando tests para agilizar el build del contenedor)
-# Esto generará también las fuentes Avro
-RUN mvn clean package -DskipTests
 
-# ETAPA 2: Ejecución (Runtime)
-FROM eclipse-temurin:17-jre-alpine
-WORKDIR /app
+# Instala curl para healthcheck y diagnósticos
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends curl && \
+    rm -rf /var/lib/apt/lists/*
 
-# Copiamos el JAR generado en la etapa anterior
-# Ajustamos el nombre para que coincida con el artifactId del pom.xml
-COPY --from=build /app/target/card-ops-producer-0.0.1-SNAPSHOT.jar app.jar
-
-# Exponemos el puerto definido en application.yml [cite: 887]
+# Puerto en el que escucha tu app
 EXPOSE 8085
 
-# Comando de inicio
+# Directorio de trabajo
+WORKDIR /app
+
+# Crea la carpeta de logs (como root)
+RUN mkdir -p /app/logs
+
+# Copia el JAR construido
+COPY target/*.jar app.jar
+
+# Ejecuta la app como root (¡sí, root!)
+USER root
+
+# Comando para ejecutar la app
 ENTRYPOINT ["java", "-jar", "app.jar"]

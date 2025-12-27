@@ -1,25 +1,23 @@
 version: "3.9"
 
-
 services:
-  card-ops-producer:
+  java-app:
+    container_name: java-app
+    hostname: java-app
     build:
       context: .
       dockerfile: Dockerfile
-    image: verdugox/card-ops-producer:latest
-    container_name: card-ops-producer
+      args:
+        - JAVA_VERSION=${JAVA_VERSION:-17}
+    image: java-app:${JAVA_VERSION}
     environment:
-      SPRING_PROFILES_ACTIVE: docker
-      KAFKA_BOOTSTRAP_SERVERS: localhost:9092
-      SCHEMA_REGISTRY_URL: http://schema-registry:8081
-      REDIS_HOST: redis
-    ports:
-      - "8085:8085"  # CAMBIO: Puerto 8085 según PDF
-    networks:
-      - bank-network
-
-
-networks:
-  bank-network:
-    external: true
-    name: bank-network # Asegura que busque exactamente este nombre
+      - HOSTNAME=java-app
+    network_mode: "host"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "-H", "User-Agent: Docker", "http://localhost:8085/actuator/health"] # Verifica que el proceso Java esté corriendo
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    user: root

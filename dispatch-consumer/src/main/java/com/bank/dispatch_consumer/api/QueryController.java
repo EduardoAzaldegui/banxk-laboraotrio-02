@@ -18,6 +18,7 @@ public class QueryController {
 
     @GetMapping("/events")
     public Single<ResponseEntity<CardReplacementEntity>> byQuery(@RequestParam String requestId) {
+        System.out.println("Paso m,mm");
         return repo.findByRequestId(requestId)
                 .map(ResponseEntity::ok)
                 .switchIfEmpty(Maybe.just(ResponseEntity.notFound().build()))

@@ -90,12 +90,13 @@ jobs:
                   genericVariable { key("repository_name"); value("\$.repository.name") }
                   genericVariable { key("pusher_name"); value("\$.pusher.name") }
                   genericVariable { key("commit_message"); value("\$.head_commit.message") }
+                  genericVariable { key("changed_files"); value("\$.commits[*].['modified','added','removed'][*]") }
                 }
                 token("${JENKINS_WEBHOOK_TOKEN_PRODUCER}")
                 causeString('Triggered by GitHub webhook (Producer)')
                 printContributedVariables(true)
                 printPostContent(true)
-                regexpFilterText('\$ref')
+                regexpFilterText('\$ref \$changed_files')
                 regexpFilterExpression("^refs/heads/${GITHUB_BRANCH_PRODUCER} .*card-ops-producer/.*")
               }
             }
@@ -132,12 +133,13 @@ jobs:
                   genericVariable { key("repository_name"); value("\$.repository.name") }
                   genericVariable { key("pusher_name"); value("\$.pusher.name") }
                   genericVariable { key("commit_message"); value("\$.head_commit.message") }
+                  genericVariable { key("changed_files"); value("\$.commits[*].['modified','added','removed'][*]") }
                 }
                 token("${JENKINS_WEBHOOK_TOKEN_CONSUMER}")
                 causeString('Triggered by GitHub webhook (Consumer)')
                 printContributedVariables(true)
                 printPostContent(true)
-                regexpFilterText('\$ref')
+                regexpFilterText('\$ref \$changed_files')
                 regexpFilterExpression("^refs/heads/${GITHUB_BRANCH_CONSUMER} .*dispatch-consumer/.*")
               }
             }

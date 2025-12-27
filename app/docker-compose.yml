@@ -44,6 +44,11 @@ services:
       - GITHUB_REPO_URL_CONSUMER=${GITHUB_REPO_URL_CONSUMER}
       - GITHUB_BRANCH_CONSUMER=${GITHUB_BRANCH_CONSUMER}
       - JENKINS_WEBHOOK_TOKEN_CONSUMER=${JENKINS_WEBHOOK_TOKEN_CONSUMER}
+
+      # 📦 Extra_variables
+      - APP_PORT=${APP_PORT}
+      - APP_COMPOSE_FILE=${APP_COMPOSE_FILE}
+      - JAVA_VERSION=${JAVA_VERSION}
     
     restart: unless-stopped
     user: root

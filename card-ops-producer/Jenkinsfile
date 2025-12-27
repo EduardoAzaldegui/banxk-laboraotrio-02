@@ -1,0 +1,315 @@
+pipeline {
+  agent any
+
+  environment {
+    // Variables de Jenkins (vienen del .env)
+    GITHUB_REPO_URL_PRODUCER = "${GITHUB_REPO_URL_PRODUCER}"
+    GITHUB_BRANCH_PRODUCER = "${GITHUB_BRANCH_PRODUCER}"
+    APP_ENVIRONMENT = "${APP_ENVIRONMENT}"
+    APP_PORT = "8085"
+    JAVA_VERSION = "${JAVA_VERSION}"
+    AWS_DEFAULT_REGION = "${AWS_DEFAULT_REGION}"
+    COMPOSE_FILE = "${APP_COMPOSE_FILE}"
+  }
+
+  stages {
+
+    stage('🔍 Verificar Entorno Java') {
+        steps {
+            script {
+            sh '''
+            echo "=== DIAGNÓSTICO DE JAVA ==="
+            java -version
+            javac -version
+            mvn -version
+            echo "JAVA_HOME: $JAVA_HOME"
+            echo "==========================="
+            '''
+            }
+        }
+    }
+
+    stage('🔍 Preparación') {
+      steps {
+        echo "🚀 Iniciando despliegue Java Spring Boot: ${GITHUB_REPO_URL_PRODUCER}"
+        echo "🌿 Rama: ${GITHUB_BRANCH_PRODUCER}"
+        echo "☕ Versión Java: ${JAVA_VERSION}"
+        echo "📡 Puerto: 8085"
+        cleanWs()
+      }
+    }
+
+    stage('📥 Clonar Repositorio') {
+      steps {
+        script {
+          echo "📦 Clonando repositorio..."
+          git branch: GITHUB_BRANCH_PRODUCER,
+              credentialsId: 'github-token',
+              url: GITHUB_REPO_URL_PRODUCER
+          sh 'git log -1 --oneline'
+        }
+      }
+    }
+
+    stage('🔧 Pre-Deploy') {
+      steps {
+        script {
+          echo "🛠️ Preparando despliegue..."
+          sh '''
+            echo "📋 Verificando la estructura del proyecto..."
+            ls -la
+
+            if [ -f "pom.xml" ] || [ -f "build.gradle" ]; then
+              echo "✅ Archivo de construcción encontrado"
+            else
+              echo "❌ Ni pom.xml ni build.gradle encontrados"
+              exit 1
+            fi
+
+            if [ -f "Dockerfile" ]; then
+              echo "✅ Dockerfile encontrado"
+            else
+              echo "❌ Dockerfile no encontrado"
+              exit 1
+            fi
+
+            if [ -f "docker-compose.yml" ]; then
+              echo "✅ docker-compose.yml encontrado"
+            else
+              echo "❌ docker-compose.yml no encontrado"
+              exit 1
+            fi
+
+            if [ -f "Jenkinsfile" ]; then
+              echo "✅ Jenkinsfile encontrado"
+            else
+              echo "❌ Jenkinsfile no encontrado"
+              exit 1
+            fi
+
+            # Verificar puerto
+            echo "🔍 Verificando puerto 8085..."
+            if netstat -tuln | grep -q ":8085"; then
+              echo "⚠️ Puerto 8085 ya en uso"
+            else
+              echo "✅ Puerto 8085 disponible"
+            fi
+          '''
+
+          sh '''
+            echo "🛑 Deteniendo servicios existentes..."
+            docker compose down || echo "No services running"
+          '''
+        }
+      }
+    }
+
+    stage('🧹 Limpieza Docker') {
+      steps {
+        script {
+          echo "🧹 LIMPIANDO IMÁGENES Y CONTENEDORES ANTERIORES..."
+
+          sh '''
+            # Parar y eliminar contenedores del proyecto
+            docker compose down --remove-orphans --rmi all || true
+
+            # Eliminar contenedores huérfanos
+            docker container prune -f
+
+            # Eliminar imágenes sin usar
+            docker image prune -a -f
+
+            # Eliminar específicamente imágenes de java-app
+            docker images | grep "java-app" | awk '{print $3}' | xargs docker rmi -f || true
+
+            # Eliminar imágenes dangling
+            docker rmi $(docker images -f "dangling=true" -q) 2>/dev/null || true
+          '''
+        }
+      }
+    }
+
+    stage('🏗️ Construir Aplicación Java') {
+      steps {
+        script {
+          echo "📦 Construyendo JAR con Maven/Gradle..."
+          sh '''
+            # Detectar si es Maven o Gradle
+            if [ -f "pom.xml" ]; then
+              echo "🔨 Usando Maven..."
+              # Verificar versión de Java y Maven
+              echo "Versión de Java:"
+              java -version
+              echo "Versión de Maven:"
+              mvn -version
+              # ¡¡¡DAR PERMISOS DE EJECUCIÓN AL MAVEN WRAPPER!!!
+              chmod +x ./mvnw
+              mvn clean package -DskipTests --batch-mode
+              # Verificar que el JAR se generó
+              ls -la target/*.jar
+            elif [ -f "build.gradle" ]; then
+              echo "🔨 Usando Gradle..."
+              # ¡¡¡DAR PERMISOS DE EJECUCIÓN AL GRADLE WRAPPER!!!
+              chmod +x ./gradlew
+              ./gradlew build -x test
+              # Verificar que el JAR se generó
+              ls -la build/libs/*.jar
+            else
+              echo "❌ No se encontró ni pom.xml ni build.gradle"
+              exit 1
+            fi
+          '''
+        }
+      }
+    }
+
+    stage('🔍 Verificar Archivos') {
+      steps {
+        sh 'pwd'
+        sh 'ls -la'
+      }
+    }
+
+
+    stage('🚀 Desplegar App Java') {
+      steps {
+        script {
+          echo "🧹 Eliminando cualquier contenedor previo llamado 'java-app'..."
+          sh '''
+            docker rm -f java-app 2>/dev/null || true
+          '''
+
+          echo "📦 Construyendo y desplegando imagen Docker..."
+          sh '''
+            echo "📦 IP para PEKKO_HOST: ${PEKKO_HOST}"
+            export PEKKO_HOST=${PEKKO_HOST}
+
+            # Construir sin caché
+            docker compose build --no-cache --pull --build-arg JAVA_VERSION=${JAVA_VERSION}
+
+            # MODIFICADO: Solo levantamos java-app
+            docker compose up -d java-app
+
+            echo "✅ Aplicación Java Spring Boot desplegada en puerto 8085"
+          '''
+        }
+      }
+    }
+
+    stage('🏥 Health Check') {
+      steps {
+        script {
+          echo "🔍 Verificando estado de la App Java vía Actuator..."
+          sh '''
+            echo "⏳ Esperando que el endpoint /actuator/health responda OK..."
+
+            MAX_RETRIES=18
+            attempt=1
+            healthy=false
+
+            CONTAINER_ID=$(docker compose ps -q java-app)
+            if [ -z "$CONTAINER_ID" ]; then
+              echo "❌ No se encontró el contenedor para el servicio 'java-app'"
+              docker compose ps
+              exit 1
+            fi
+            echo "🐳 ID del contenedor: $CONTAINER_ID"
+
+            while [ $attempt -le $MAX_RETRIES ]; do
+              docker_status=$(docker inspect -f '{{.State.Health.Status}}' $CONTAINER_ID 2>/dev/null || echo "unknown")
+              echo "🐳 Estado Docker: $docker_status"
+
+              if [ "$docker_status" = "healthy" ]; then
+                echo "✅ App Java está saludable según Docker"
+                healthy=true
+                break
+              fi
+
+              if [ "$docker_status" = "unhealthy" ]; then
+                  echo "❌ App Java está en estado UNHEALTHY según Docker"
+                  docker exec java-app curl -v http://localhost:8085/actuator/health || echo "Curl falló"
+                  docker compose logs --tail=50 java-app
+                  exit 1
+              fi
+
+              echo "⌛ Intento $attempt/$MAX_RETRIES - Esperando..."
+              sleep 10
+              attempt=$((attempt + 1))
+            done
+
+            if [ "$healthy" != "true" ]; then
+              echo "❌ Timeout: La app no alcanzó estado HEALTHY"
+              curl -v http://localhost:8085/actuator/health || echo "Curl falló"
+              docker compose logs --tail=100 java-app
+              exit 1
+            fi
+
+            echo "🎉 ¡Health Check completado con éxito!"
+          '''
+        }
+      }
+    }
+
+    // ELIMINADO: stage('📝 Registro Manual en Consul')
+
+    stage('📋 Ver Logs en Servidor') {
+      steps {
+        script {
+          echo "📝 Copiando logs desde el contenedor al workspace..."
+          sh '''
+            # Copia los logs desde el contenedor
+            docker cp java-app:/app/logs/. /shared-logs/pluggyLogs/build/ 2>/dev/null || echo "ℹ️  No hay logs aún"
+
+            if [ -d "/shared-logs" ]; then
+              echo "📂 Contenido de /shared-logs: ..."
+              ls -la /shared-logs/
+            else
+              echo "❌ La carpeta '/shared-logs' no existe."
+            fi
+          '''
+        }
+      }
+    }
+
+  }
+
+  post {
+    always {
+      script {
+        cleanWs()
+      }
+    }
+
+    success {
+      script {
+        echo """
+        ✅ JAVA SPRING BOOT DEPLOYMENT EXITOSO ✅
+
+        ======================= RESUMEN =======================
+        🎯 Aplicación:      ${GITHUB_REPO_URL_PRODUCER}
+        🌿 Rama:            ${GITHUB_BRANCH_PRODUCER}
+        🏷️ Entorno:         ${APP_ENVIRONMENT}
+        ☕ Java:            ${JAVA_VERSION}
+        📡 Puerto:          8085
+        ⏱️ Tiempo:          ${currentBuild.durationString}
+        ======================================================
+        """
+      }
+    }
+
+    failure {
+      script {
+        echo """
+        ❌ FALLA EN DEPLOYMENT JAVA SPRING BOOT ❌
+
+        ====================== DIAGNÓSTICO ===================
+        Build:     #${BUILD_NUMBER}
+        Error:     ${currentBuild.result}
+        ======================================================
+        """
+        sh 'docker compose logs --tail=100 java-app || true'
+        sh 'docker compose ps -a || true'
+      }
+    }
+  }
+}
