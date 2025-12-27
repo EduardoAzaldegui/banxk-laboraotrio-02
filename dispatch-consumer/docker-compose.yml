@@ -34,8 +34,8 @@ services:
        - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
        - SCHEMA_REGISTRY_URL=http://schema-registry:8081
 
-       # Mongo: Usamos 'mongo-bank' y el puerto INTERNO (27018)
-       - MONGODB_URI=mongodb://root:root@mongo-bank:27018/bank?authSource=admin
+       # Mongo: Usamos 'mongo-bank' y el puerto INTERNO (27017)
+       - MONGODB_URI=mongodb://root:root@mongo-bank:27017/bank?authSource=admin
     networks:
       - bank-network
     # Healthcheck simple para apps que no son web (como nuestro ejemplo)
