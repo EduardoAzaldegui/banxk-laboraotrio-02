@@ -55,6 +55,13 @@ services:
       - redis_data:/data
     networks:
       - bank-network
+    command: >
+      redis-server
+      --bind 0.0.0.0
+      --port 6379
+      --maxmemory 8gb
+      --maxmemory-policy allkeys-lfu
+      --dir /data
 
   mongodb:
     image: mongo:6
